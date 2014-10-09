@@ -1,0 +1,80 @@
+#!/usr/bin/python
+
+from gi.repository import Gtk
+from glob import glob
+import os
+
+def get_themes():
+  t = []
+  for path in PATHS:
+    t += [x.split('/')[-2] for x in glob('%s/*/gtk-3.0' % path)]
+  return sorted(t)
+
+def read_config():
+  f = open(os.path.expanduser("~/.xsettingsd"), 'r').readlines()
+  config = {}
+  for l in f:
+    try:
+      k = l.split()[0]
+      v = l.split()[1:]
+      config[k] = " ".join(v)
+    except:
+      pass
+  return config
+
+def write_config():
+  with open(os.path.expanduser("~/.xsettingsd"), 'w') as f:
+    for k,v in CONFIG.iteritems():
+      f.write("%s %s\n" %(k,v))
+
+def get_current_theme(name_store):
+  answer = 0
+  ct = CONFIG["Net/ThemeName"].strip('"')
+  for row in name_store:
+    if row[1] == ct:
+      answer = row[0]
+  return answer
+
+PATHS = [os.path.expanduser('~/.themes'), "/usr/share/themes"]
+CONFIG = read_config()  
+
+class ThemesWindow(Gtk.Window):
+
+    def __init__(self):
+        Gtk.Window.__init__(self, title="Xsettingsd Theme Chooser")
+
+        self.set_border_width(10)
+
+        name_store = Gtk.ListStore(int, str)
+        for i, theme in enumerate(get_themes()):
+          name_store.append([i, theme])
+
+        hbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+
+        theme_combo = Gtk.ComboBox.new_with_model_and_entry(name_store)
+        theme_combo.connect("changed", self.on_theme_combo_changed)
+        theme_combo.set_entry_text_column(1)
+        theme_combo.set_active(get_current_theme(name_store))
+        theme_combo.set_can_focus(False)
+        theme_combo.get_child().props.can_focus = False
+        hbox.pack_start(theme_combo, False, False, 0)
+
+        self.add(hbox)
+
+        button = Gtk.Button("_Done", use_underline=True)
+        button.connect("clicked", Gtk.main_quit)
+        hbox.pack_start(button, True, True, 0)
+        
+
+    def on_theme_combo_changed(self, combo):
+        tree_iter = combo.get_active_iter()
+        model = combo.get_model()
+        row_id, name = model[tree_iter][:2]
+        CONFIG["Net/ThemeName"] = "\"%s\"" % name
+        write_config()
+        os.system("killall -HUP xsettingsd")
+  
+win = ThemesWindow()
+win.connect("delete-event", Gtk.main_quit)
+win.show_all()
+Gtk.main()
